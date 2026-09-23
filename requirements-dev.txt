@@ -1,0 +1,5 @@
+# Development / test dependencies only. The app has no install-time runtime
+# requirements: on AWS Lambda, boto3 is provided by the Python runtime. These
+# are what you need to run the unit tests and the sync check locally.
+boto3
+pytest

@@ -1,0 +1,34 @@
+# CI for the sns-email-aide repo itself: run the unit tests and verify the
+# inline Lambda code in the CloudFormation template still matches its source.
+# Runs on GitHub-hosted runners with no AWS account or credentials - the unit
+# tests mock every AWS call.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # Dev/test deps only (boto3 for the Lambda sources under test, pytest to
+      # run them). Same file a local developer installs, so CI and local match.
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      # Fail fast if the template's inline code drifted from src/lambda/*.
+      # (test_template_sync.py also covers this; kept explicit so the intent is
+      # obvious in the CI log.)
+      - name: Check inline Lambda code is in sync with source
+        run: python scripts/sync_lambda_code.py
+
+      - name: Run unit tests
+        run: python -m pytest tests/unit -q

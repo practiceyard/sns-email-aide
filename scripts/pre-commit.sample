@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT-0
+# Optional git pre-commit hook: block a commit if the template's inline Lambda
+# code has drifted from src/lambda/*, the same check CI runs.
+#
+# Install:
+#   cp scripts/pre-commit.sample .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+
+if ! python scripts/sync_lambda_code.py; then
+    echo
+    echo "Commit blocked: inline Lambda code is out of sync with src/lambda/."
+    echo "Fix it with:  python scripts/sync_lambda_code.py --sync"
+    exit 1
+fi

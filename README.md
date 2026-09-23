@@ -253,6 +253,22 @@ Two things can block a clean `delete-stack`, both intentional:
 
 The DynamoDB table deletes freely.
 
+## Developing
+
+Install the dev/test dependencies (boto3 + pytest; the app itself needs no
+install-time deps since Lambda provides boto3 at runtime):
+```
+pip install -r requirements-dev.txt
+```
+
+When you change a Lambda, edit the standalone source under `src/lambda/<name>/index.py`,
+then copy it into the template's inline block:
+```
+python scripts/sync_lambda_code.py --sync
+```
+Run it with no argument to only *check* for drift (this is what CI runs; it fails
+if the inline code and source differ). See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Tests
 
 Unit tests (no AWS account needed):
