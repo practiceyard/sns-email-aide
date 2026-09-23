@@ -11,11 +11,15 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pin the runner image so a future `ubuntu-latest` migration can't change
+    # the environment out from under us without an explicit bump here.
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      # checkout@v5 / setup-python@v6 run on the Node 24 runtime; the older
+      # v4/v5 tags target Node 20, which GitHub has deprecated.
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
 
