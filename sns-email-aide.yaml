@@ -19,6 +19,30 @@ Parameters:
       in this region which means this domain should be used exclusively with the aide. 
       Supplied by the operator; the aide has no dependency on any consuming application.
 
+  TopicAccountScope:
+    Type: String
+    Default: ThisAccountOnly
+    AllowedValues:
+      - ThisAccountOnly
+      - AllAccounts
+      - SpecificAccounts
+    Description: >
+      Which accounts' SNS topics the aide may confirm subscriptions on. The
+      confirmation call runs from this (the aide's) account against topics that
+      may live in consuming test accounts.
+      ThisAccountOnly (default, least privilege): only topics in this account.
+      SpecificAccounts: only the accounts listed in AllowedTopicAccountIds
+      (authoritative — this account is included only if you list it).
+      AllAccounts: topics in ANY account (broad; opt-in only).
+
+  AllowedTopicAccountIds:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: >
+      12-digit account IDs whose topics the aide may confirm, used only when
+      TopicAccountScope is SpecificAccounts (ignored otherwise). The list is
+      authoritative; include this account explicitly if it should be permitted.
+
   RecordTtlSeconds:
     Type: Number
     Default: 7200
@@ -27,6 +51,31 @@ Parameters:
       TTL in seconds for records. Registration/confirmation/validation rows for
       an email share the registration's expiry; unexpected rows (mail to an
       unregistered address) expire independently after this many seconds.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Aide Configuration
+        Parameters:
+          - EmailDomain
+          - TopicAccountScope
+          - AllowedTopicAccountIds
+          - RecordTtlSeconds
+    ParameterLabels:
+      EmailDomain:
+        default: Receiving email domain
+      TopicAccountScope:
+        default: Which accounts' SNS topics may be confirmed?
+      AllowedTopicAccountIds:
+        default: Allowed topic account IDs (for Specific Accounts)
+      RecordTtlSeconds:
+        default: Record retention (seconds)
+
+Conditions:
+  ScopeThisAccountOnly: !Equals [!Ref TopicAccountScope, ThisAccountOnly]
+  AllowAllTopicAccounts: !Equals [!Ref TopicAccountScope, AllAccounts]
+  ScopeToSpecificAccounts: !Equals [!Ref TopicAccountScope, SpecificAccounts]
 
 Resources:
   # --- DynamoDB ---
@@ -131,12 +180,42 @@ Resources:
         - PolicyName: SNSConfirm
           PolicyDocument:
             Version: "2012-10-17"
+            # Topics are created per test run and may live in consuming
+            # (cross-account) test accounts, so the specific ARN isn't known
+            # here. Resource stays wildcard; access is gated by account via the
+            # aws:ResourceAccount condition key. This account is always allowed;
+            # broader scope is opt-in via TopicAccountScope.
             Statement:
-              - Effect: Allow
-                Action: sns:ConfirmSubscription
-                # Topics are created per test run, so the specific ARN isn't
-                # known here; scope to any SNS topic in this account.
-                Resource: !Sub "arn:${AWS::Partition}:sns:*:${AWS::AccountId}:*"
+              # ThisAccountOnly: topics in this (the aide's own) account.
+              # (AllAccounts covers this account via its wildcard; SpecificAccounts
+              # honors the given list literally, so this statement is only needed
+              # for the ThisAccountOnly default.)
+              - !If
+                - ScopeThisAccountOnly
+                - Effect: Allow
+                  Action: sns:ConfirmSubscription
+                  Resource: !Sub "arn:${AWS::Partition}:sns:*:*:*"
+                  Condition:
+                    StringEquals:
+                      aws:ResourceAccount: !Ref "AWS::AccountId"
+                - !Ref "AWS::NoValue"
+              # SpecificAccounts: the explicitly listed accounts (authoritative).
+              - !If
+                - ScopeToSpecificAccounts
+                - Effect: Allow
+                  Action: sns:ConfirmSubscription
+                  Resource: !Sub "arn:${AWS::Partition}:sns:*:*:*"
+                  Condition:
+                    StringEquals:
+                      aws:ResourceAccount: !Ref AllowedTopicAccountIds
+                - !Ref "AWS::NoValue"
+              # AllAccounts: topics in any account (unconditioned, opt-in).
+              - !If
+                - AllowAllTopicAccounts
+                - Effect: Allow
+                  Action: sns:ConfirmSubscription
+                  Resource: !Sub "arn:${AWS::Partition}:sns:*:*:*"
+                - !Ref "AWS::NoValue"
         - PolicyName: S3Mail
           PolicyDocument:
             Version: "2012-10-17"
