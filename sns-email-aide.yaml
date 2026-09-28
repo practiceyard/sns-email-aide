@@ -535,9 +535,9 @@ Resources:
           CONFIRMATION_SUBJECTS = ['AWS Notification - Subscription Confirmation']
 
           CONFIRMATION_URL_PATTERN = re.compile(
-              r'https://sns\.[a-z0-9-]+\.amazonaws\.com/confirmation\.html\?[^\s"<]+')
+              r'https://sns\.[a-z0-9-]+\.amazonaws\.com/confirmation(?:-v\d+)?\.html\?[^\s"<]+')
           UNSUBSCRIBE_URL_PATTERN = re.compile(
-              r'https://sns\.[a-z0-9-]+\.amazonaws\.com/unsubscribe\.html\?[^\s"<]+')
+              r'https://sns\.[a-z0-9-]+\.amazonaws\.com/unsubscribe(?:-v\d+)?\.html\?[^\s"<]+')
 
           MAX_BODY = 8000
           MAX_UNEXPECTED_SUBJECT = 20

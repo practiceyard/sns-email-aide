@@ -18,10 +18,15 @@ SNS_SENDER = 'no-reply@sns.amazonaws.com'
 SNS_SUBJECT = 'AWS Notification - Subscription Confirmation'
 ACCOUNT = '123456789012'
 TOPIC_ARN = f'arn:aws:sns:us-east-1:{ACCOUNT}:MyTopic'
-CONFIRM_URL = ('https://sns.us-east-1.amazonaws.com/confirmation.html'
+CONFIRM_URL = ('https://sns.us-east-1.amazonaws.com/confirmation-v2.html'
                f'?TopicArn={TOPIC_ARN}&Token=abc123')
-UNSUB_URL = ('https://sns.us-east-1.amazonaws.com/unsubscribe.html'
+UNSUB_URL = ('https://sns.us-east-1.amazonaws.com/unsubscribe-v2.html'
              f'?SubscriptionArn={TOPIC_ARN}:8294-sub-id&Endpoint=test@example.com')
+# Legacy (pre-v2) forms — must still match after the version-tolerant regex fix.
+CONFIRM_URL_LEGACY = ('https://sns.us-east-1.amazonaws.com/confirmation.html'
+                      f'?TopicArn={TOPIC_ARN}&Token=abc123')
+UNSUB_URL_LEGACY = ('https://sns.us-east-1.amazonaws.com/unsubscribe.html'
+                    f'?SubscriptionArn={TOPIC_ARN}:8294-sub-id&Endpoint=test@example.com')
 REG_TTL = 1700007200
 
 
@@ -267,6 +272,22 @@ class TestProcessor(unittest.TestCase):
             _reg(expectations={'subject-matches': 'S', 'body-contains-all': 'keyword'}))
         index.handler(_make_ses_event(['test@example.com'], 'S'), None)
         self.assertEqual(self._one(table)['result'], 'failure')
+
+    def test_confirmation_legacy_url_still_matches(self, mock_resource, mock_client):
+        # AWS previously sent /confirmation.html (no -vN); regex must still match.
+        index, table, sns, s3 = self._wire(mock_resource, mock_client,
+                                            _raw_email(CONFIRM_URL_LEGACY), _reg())
+        index.handler(_make_ses_event(['test@example.com'], SNS_SUBJECT), None)
+        sns.confirm_subscription.assert_called_once_with(TopicArn=TOPIC_ARN, Token='abc123')
+        self.assertEqual(self._one(table)['result'], 'success')
+
+    def test_notification_legacy_unsubscribe_footer_matches(self, mock_resource, mock_client):
+        # Legacy /unsubscribe.html footer must still yield the topic ARN.
+        index, table, sns, s3 = self._wire(
+            mock_resource, mock_client, _raw_email('welcome\n' + UNSUB_URL_LEGACY),
+            _reg(expectations={'sns-topic-name': 'MyTopic'}))
+        index.handler(_make_ses_event(['test@example.com'], 'Any Subject'), None)
+        self.assertEqual(self._one(table)['result'], 'success')
 
     def test_registration_lookup_follows_pagination(self, mock_resource, mock_client):
         # First page empty with a cursor; registration found on the second page.
